@@ -5,7 +5,7 @@ import aiRoutes from "./routes/ai.js"; // 👈 this is correct
 import dotenv from "dotenv";
 import omdbRoutes from "./routes/omdb.js";
 import tmdbRoutes from "./routes/tmdb.js";
-import watchmodeRoutes from "./routes/watchmode.js";
+import watchmodeRoutes from "./routes/watchMode.js";
 import tmdbDiscoverRoute from "./routes/tmdbDiscover.js";
 
 dotenv.config();
