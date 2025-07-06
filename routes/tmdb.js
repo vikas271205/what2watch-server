@@ -51,6 +51,31 @@ router.get("/discover", async (req, res) => {
   }
 });
 
+// Add Bollywood and Hollywood endpoints
+router.get("/discover/bollywood", async (req, res) => {
+  const { page = 1 } = req.query;
+  try {
+    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc&page=${page}`;
+    const data = await fetchWithRetry(url);
+    res.json(data.results);
+  } catch (err) {
+    console.error("TMDB Bollywood Discover Error:", err);
+    res.status(500).json({ error: "Failed to fetch Bollywood movies" });
+  }
+});
+
+router.get("/discover/hollywood", async (req, res) => {
+  const { page = 1 } = req.query;
+  try {
+    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&region=US&sort_by=popularity.desc&page=${page}`;
+    const data = await fetchWithRetry(url);
+    res.json(data.results);
+  } catch (err) {
+    console.error("TMDB Hollywood Discover Error:", err);
+    res.status(500).json({ error: "Failed to fetch Hollywood movies" });
+  }
+});
+
 // ------------------------------------------------------
 // 🎭 Genres & By‑Genre
 // ------------------------------------------------------
