@@ -1,10 +1,10 @@
+// watchmode.js
 import express from "express";
 import fetch from "node-fetch";
 const router = express.Router();
 
 const API_KEY = process.env.WATCHMODE_API_KEY;
 
-// Get Watchmode ID by title + optional year
 router.get("/id", async (req, res) => {
   const { title, year } = req.query;
   if (!title) return res.status(400).json({ error: "title is required" });
@@ -25,7 +25,6 @@ router.get("/id", async (req, res) => {
   }
 });
 
-// Get streaming sources by Watchmode ID
 router.get("/sources/:id", async (req, res) => {
   const { id } = req.params;
 
