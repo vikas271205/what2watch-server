@@ -31,4 +31,4 @@ router.get("/", async (req, res) => {
   }
 });
 
-export default router;
+export { router as omdbRouter };
