@@ -14,27 +14,31 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-
 const allowedOrigins = [
   'http://localhost:3000',
   'https://what2watch-271205.web.app',
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
-      return callback(new Error('Not allowed by CORS'));
+      callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+};
+
+// Use CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests for all routes
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
+// Your routes
 app.use("/api", aiRoutes);
 app.use("/api/omdb", omdbRouter);
 app.use("/api/tmdb", tmdbRouter);
