@@ -1,21 +1,22 @@
 {
-  "name": "server",
+  "name": "what2watch-server",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^17.0.1",
-    "express": "^5.1.0",
-    "groq-sdk": "^0.26.0",
-    "node-fetch": "^3.3.2",
-    "openai": "^5.8.2"
+    "dotenv": "^16.0.0",
+    "express": "^4.17.1",
+    "express-rate-limit": "^6.7.0",
+    "groq-sdk": "^0.7.0",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }
