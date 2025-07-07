@@ -36,7 +36,7 @@ router.get("/", async (req, res) => {
     const response = await fetch(url);
     const data = await response.json();
 
-    console.log(`OMDB API response for title "${title}"${year ? ` year ${year}` : ""}:`, data);
+    // console.log(`OMDB API response for title "${title}"${year ? ` year ${year}` : ""}:`, data);
 
     if (data.Response === "False") {
       return res.status(404).json({ error: data.Error || "Movie not found" });

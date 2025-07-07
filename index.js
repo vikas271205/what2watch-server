@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-
+import { recommendRouter } from "./routes/recommend.js";
 import aiRoutes from "./routes/ai.js";
 import { omdbRouter } from "./routes/omdb.js";
 import { tmdbRouter } from "./routes/tmdb.js";
@@ -44,6 +44,7 @@ app.use("/api/omdb", omdbRouter);
 app.use("/api/tmdb", tmdbRouter);
 app.use("/api/watchmode", watchmodeRouter);
 app.use("/api/tmdb/discover", discoverRouter);
+app.use("/api/recommend", recommendRouter);
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
