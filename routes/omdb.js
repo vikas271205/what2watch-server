@@ -44,3 +44,4 @@ if (cache.has(cacheKey)) {
     res.status(500).json({ error: "Failed to fetch OMDb data" });
   }
 });
+export { router as omdbRouter };
