@@ -17,6 +17,17 @@ const limiter = rateLimit({
 
 router.use(limiter);
 
+const getCachedOrFetch = async (cacheKey, url) => {
+  if (cache.has(cacheKey)) {
+    console.log(`✅ Cache hit: ${cacheKey}`);
+    return cache.get(cacheKey);
+  }
+  console.log(`❌ Cache miss: ${cacheKey}`);
+  const data = await fetchWithRetry(url);
+  cache.set(cacheKey, data);
+  return data;
+};
+
 // ------------------------------------------------------
 // 🔍 Search (used by chatbot autocomplete)
 // ------------------------------------------------------
@@ -27,12 +38,8 @@ router.get("/search", async (req, res) => {
   }
   const cacheKey = `search_${query}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=en-US&include_adult=false`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Search Error:", err);
@@ -47,12 +54,8 @@ router.get("/trending", async (req, res) => {
   const { time = "day", page = 1 } = req.query;
   const cacheKey = `trending_${time}_${page}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/trending/all/${time}?api_key=${API_KEY}&page=${page}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.results);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Trending Error:", err);
@@ -64,12 +67,8 @@ router.get("/discover", async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_${page}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&sort_by=popularity.desc&page=${page}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.results);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Discover Error:", err);
@@ -81,12 +80,8 @@ router.get("/discover/bollywood", async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_bollywood_${page}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc&page=${page}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.results);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Bollywood Discover Error:", err);
@@ -98,13 +93,8 @@ router.get("/discover/hollywood", async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_hollywood_${page}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&region=US&sort_by=popularity.desc&page=${page}`;
-
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.results);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Hollywood Discover Error:", err);
@@ -118,12 +108,8 @@ router.get("/discover/hollywood", async (req, res) => {
 router.get("/genres", async (_req, res) => {
   const cacheKey = "genres";
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en-US`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.genres);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.genres);
   } catch (err) {
     console.error("TMDB Genres Error:", err);
@@ -136,12 +122,8 @@ router.get("/byGenre", async (req, res) => {
   if (!genreId) return res.status(400).json({ error: "genreId is required" });
   const cacheKey = `byGenre_${genreId}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_genres=${genreId}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data.results);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB byGenre Error:", err);
@@ -156,12 +138,8 @@ router.get("/movie/:id", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `movie_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/movie/${id}?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Detail Error:", err);
@@ -173,12 +151,8 @@ router.get("/movie/:id/videos", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `movie_videos_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/movie/${id}/videos?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Videos Error:", err);
@@ -190,12 +164,8 @@ router.get("/movie/:id/credits", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `movie_credits_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/movie/${id}/credits?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Credits Error:", err);
@@ -207,12 +177,8 @@ router.get("/movie/:id/similar", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `movie_similar_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/movie/${id}/similar?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Similar Movies Error:", err);
@@ -227,12 +193,8 @@ router.get("/person/:id", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `person_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/person/${id}?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Person Error:", err);
@@ -244,12 +206,8 @@ router.get("/person/:id/movies", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `person_movies_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/person/${id}/movie_credits?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Person Movies Error:", err);
@@ -264,12 +222,8 @@ router.get("/tv/:id", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `tv_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/tv/${id}?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Detail Error:", err);
@@ -281,12 +235,8 @@ router.get("/tv/:id/videos", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `tv_videos_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/tv/${id}/videos?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Videos Error:", err);
@@ -298,12 +248,8 @@ router.get("/tv/:id/credits", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `tv_credits_${id}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/tv/${id}/credits?api_key=${API_KEY}`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Credits Error:", err);
@@ -314,12 +260,8 @@ router.get("/tv/:id/credits", async (req, res) => {
 router.get("/genre/tv", async (_req, res) => {
   const cacheKey = "tv_genres";
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/genre/tv/list?api_key=${API_KEY}&language=en-US`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Genre Error:", err);
@@ -331,12 +273,8 @@ router.get("/discover/tv", async (req, res) => {
   const genreParam = req.query.with_genres;
   const cacheKey = `discover_tv_${genreParam}`;
   try {
-    if (cache.has(cacheKey)) {
-      return res.json(cache.get(cacheKey));
-    }
     const url = `${BASE_URL}/discover/tv?api_key=${API_KEY}&with_genres=${genreParam}&sort_by=popularity.desc&language=en-US`;
-    const data = await fetchWithRetry(url);
-    cache.set(cacheKey, data);
+    const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
     console.error("TMDB Discover TV Error:", err);

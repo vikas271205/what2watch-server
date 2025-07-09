@@ -5,8 +5,8 @@ import rateLimit from "express-rate-limit";
 
 const router = express.Router();
 const cache = new NodeCache({ stdTTL: 86400 }); // 1 day cache
-
 const OMDB_API_KEY = process.env.OMDB_API_KEY;
+
 if (!OMDB_API_KEY) {
   console.error("❌ Missing OMDB_API_KEY in env");
 }
