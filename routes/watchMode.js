@@ -102,29 +102,36 @@ router.get("/sources/:id", async (req, res) => {
       "Hungama Play",
       "AppleTV",
       "Amazon Video",
+      "Disney+",
     ];
 
+    // Filter only subscription sources and one per platform
     const filtered = data
       .filter(
         (s) =>
-          s.region === "IN" &&
           s.web_url &&
-          preferredPlatforms.includes(s.name) &&
-          ["sub", "buy", "rent"].includes(s.type)
+          s.type === "sub" &&
+          preferredPlatforms.some((platform) =>
+            s.name.toLowerCase().includes(platform.toLowerCase())
+          )
       )
       .reduce((acc, curr) => {
-        if (!acc.some((s) => s.name === curr.name && s.type === curr.type)) {
+        if (!acc.find((s) => s.name === curr.name)) {
           acc.push(curr);
         }
         return acc;
       }, []);
 
     cache.set(cacheKey, filtered);
+    console.log(`🎯 Final Filtered Sources for ${id}:`, filtered.map(s => s.name));
     return res.json(filtered);
   } catch (err) {
     console.error("Error fetching streaming sources:", err);
     return res.status(500).json({ error: "Failed to fetch streaming sources" });
   }
 });
+
+
+
 
 export { router as watchmodeRouter };

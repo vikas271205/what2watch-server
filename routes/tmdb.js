@@ -242,6 +242,20 @@ router.get("/tv/:id/videos", async (req, res) => {
   }
 });
 
+router.get('/tv/:id/similar', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const url = `https://api.themoviedb.org/3/tv/${id}/similar?api_key=${process.env.TMDB_API_KEY}&language=en-US&page=1`;
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching similar TV shows:", err);
+    res.status(500).json({ error: "Failed to fetch similar TV shows" });
+  }
+});
+
+
 router.get("/tv/:id/credits", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `tv_credits_${id}`;
