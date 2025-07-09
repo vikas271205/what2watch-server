@@ -8,14 +8,12 @@ const API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = "https://api.themoviedb.org/3";
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
-// Rate limiter: max 100 requests per 15 minutes
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10000,
-  message: { error: "Rate limit exceeded. Try again later." },
+// Apply rate limit ONLY to search route (autocomplete-heavy)
+const searchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit to 100 search requests per 15 min per IP
+  message: { error: "Rate limit exceeded for search. Try again later." },
 });
-
-router.use(limiter);
 
 const getCachedOrFetch = async (cacheKey, url) => {
   if (cache.has(cacheKey)) {
@@ -31,7 +29,7 @@ const getCachedOrFetch = async (cacheKey, url) => {
 // ------------------------------------------------------
 // 🔍 Search (used by chatbot autocomplete)
 // ------------------------------------------------------
-router.get("/search", async (req, res) => {
+router.get("/search", searchLimiter, async (req, res) => {
   const query = req.query.q;
   if (!query || query.trim() === "") {
     return res.status(400).json({ error: "Search query is required" });
