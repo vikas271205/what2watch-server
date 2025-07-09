@@ -8,7 +8,7 @@ import { omdbRouter } from "./routes/omdb.js";
 import { tmdbRouter } from "./routes/tmdb.js";
 import { watchmodeRouter } from "./routes/watchMode.js";
 import { discoverRouter } from "./routes/tmdbDiscover.js";
-
+import rewriteOverviewRouter from "./routes/rewriteOverview.js";
 dotenv.config();
 
 const app = express();
@@ -45,7 +45,7 @@ app.use("/api/tmdb", tmdbRouter);
 app.use("/api/watchmode", watchmodeRouter);
 app.use("/api/tmdb/discover", discoverRouter);
 app.use("/api/recommend", recommendRouter);
-
+app.use("/api", rewriteOverviewRouter);
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
