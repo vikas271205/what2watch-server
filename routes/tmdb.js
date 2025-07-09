@@ -11,7 +11,7 @@ const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 // Rate limiter: max 100 requests per 15 minutes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 10000,
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
