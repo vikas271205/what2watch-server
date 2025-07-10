@@ -4,22 +4,30 @@ import { db } from "../utils/firebaseAdmin.js";
 
 const router = express.Router();
 
-// Add to recommended (admin-only)
+// ✅ Admin-only: Add to recommended
 router.post("/add", verifyAdmin, async (req, res) => {
   try {
-    const { id, type, title, rating, year, poster, tmdbRating, imdbRating, rtRating, genre_ids = [], language } = req.body;
+    const {
+      id,
+      type,
+      title,
+      rating,
+      year,
+      poster,
+      tmdbRating,
+      imdbRating,
+      rtRating,
+      genre_ids = [],
+      language,
+    } = req.body;
 
     if (!id || !type || !title) {
-      return res.status(400).json({ error: "Missing required fields: id, type, title" });
-    }
-
-    if (!["movie", "tv"].includes(type)) {
-      return res.status(400).json({ error: "Invalid type: must be 'movie' or 'tv'" });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
     const docId = `${type}_${id}`;
     const data = {
-      id: id.toString(), // Ensure id is a string
+      id: id.toString(),
       type,
       title,
       rating: Number(rating) || 0,
@@ -28,22 +36,12 @@ router.post("/add", verifyAdmin, async (req, res) => {
       tmdbRating: tmdbRating || null,
       imdbRating: imdbRating || null,
       rtRating: rtRating || null,
-      genre_ids: Array.isArray(genre_ids) ? genre_ids.map(id => Number(id)) : [],
+      genre_ids: Array.isArray(genre_ids) ? genre_ids.map((id) => Number(id)) : [],
       language: language || null,
       createdAt: Date.now(),
     };
 
-    console.log(`Attempting to add ${docId} to recommended:`, data); // Debug log
-
-    // Validate Firestore write permissions
-    try {
-      await db.collection("recommended").doc(docId).set(data);
-    } catch (firestoreErr) {
-      console.error("Firestore write error:", firestoreErr);
-      return res.status(403).json({ error: `Firestore error: ${firestoreErr.message}` });
-    }
-
-    console.log(`Successfully added ${docId} to recommended`);
+    await db.collection("recommended").doc(docId).set(data);
     res.json({ success: true });
   } catch (err) {
     console.error("Error adding to recommended:", err);
@@ -51,11 +49,11 @@ router.post("/add", verifyAdmin, async (req, res) => {
   }
 });
 
-// Get all recommended (public)
+// ✅ Public: Get all recommendations
 router.get("/all", async (req, res) => {
   try {
     const snapshot = await db.collection("recommended").get();
-    const data = snapshot.docs.map(doc => doc.data());
+    const data = snapshot.docs.map((doc) => doc.data());
     res.json(data);
   } catch (err) {
     console.error("Failed to fetch recommended:", err);
@@ -63,11 +61,10 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// Delete recommended by ID (admin only)
+// ✅ Admin-only: Delete
 router.delete("/:id", verifyAdmin, async (req, res) => {
   try {
     const docId = req.params.id;
-    console.log("Deleting doc:", docId);
     await db.collection("recommended").doc(docId).delete();
     res.json({ success: true });
   } catch (err) {

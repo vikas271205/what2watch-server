@@ -115,19 +115,25 @@ router.get("/genres", async (_req, res) => {
   }
 });
 
+
 router.get("/byGenre", async (req, res) => {
-  const { genreId } = req.query;
+  const { genreId, page } = req.query;
   if (!genreId) return res.status(400).json({ error: "genreId is required" });
-  const cacheKey = `byGenre_${genreId}`;
+
+  // Generate a random page number between 1–20 if not provided
+  const pageNumber = page ? Number(page) : Math.floor(Math.random() * 20) + 1;
+
   try {
-    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_genres=${genreId}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=100&include_adult=false&language=en-US&page=${pageNumber}`;
+
+    const data = await getCachedOrFetch(`genre_${genreId}_p${pageNumber}`, url, 3600); // Optional: cache 1 hour
     res.json(data.results);
   } catch (err) {
     console.error("TMDB byGenre Error:", err);
     res.status(500).json({ error: "Failed to fetch movies by genre" });
   }
 });
+
 
 // ------------------------------------------------------
 // 🎬 MOVIE ROUTES
