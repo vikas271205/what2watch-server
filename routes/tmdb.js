@@ -289,9 +289,19 @@ router.get("/genre/tv", async (_req, res) => {
 
 router.get("/discover/tv", async (req, res) => {
   const genreParam = req.query.with_genres;
-  const cacheKey = `discover_tv_${genreParam}`;
+  const language = req.query.language;
+  const year = req.query.year;
+  const page = req.query.page || 1;
+
+  let url = `${BASE_URL}/discover/tv?api_key=${API_KEY}&sort_by=popularity.desc&page=${page}&language=en-US`;
+
+  if (genreParam) url += `&with_genres=${genreParam}`;
+  if (language && language !== "all") url += `&with_original_language=${language}`;
+  if (year && year !== "all") url += `&first_air_date_year=${year}`;
+
+  const cacheKey = `discover_tv_${genreParam || "all"}_${language || "all"}_${year || "all"}_${page}`;
+
   try {
-    const url = `${BASE_URL}/discover/tv?api_key=${API_KEY}&with_genres=${genreParam}&sort_by=popularity.desc&language=en-US`;
     const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
