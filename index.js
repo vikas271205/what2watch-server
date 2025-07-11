@@ -8,7 +8,6 @@ import { omdbRouter } from "./routes/omdb.js";
 import { tmdbRouter } from "./routes/tmdb.js";
 import { watchmodeRouter } from "./routes/watchMode.js";
 import { discoverRouter } from "./routes/tmdbDiscover.js";
-import streamingRouter from "./routes/streamingRouter.js";
 import rewriteOverviewRouter from "./routes/rewriteOverview.js";
 dotenv.config();
 
@@ -47,7 +46,6 @@ app.use("/api/watchmode", watchmodeRouter);
 app.use("/api/tmdb/discover", discoverRouter);
 app.use("/api/recommend", recommendRouter);
 app.use("/api", rewriteOverviewRouter);
-app.use("/api/streaming", streamingRouter);
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
