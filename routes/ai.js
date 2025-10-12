@@ -1,109 +1,159 @@
+// ai.js
 import express from "express";
-import { Groq } from "groq-sdk";
 import dotenv from "dotenv";
+import Groq from "groq-sdk";
 import { getRecommendedMovies } from "../utils/getRecommendedMovies.js";
 
 dotenv.config();
 const router = express.Router();
-const conversationMemory = {};
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// session store: { sessionId: { genre, language, year, mode, lastMovie } }
+const conversationState = {};
+
+// extractor: returns JSON with optional fields genre, language, year
+const extractorPrompt = `
+You are an extractor. Given a short user message about movies return a JSON object ONLY.
+Fields (optional): "genre" (string), "language" (string), "year" (integer).
+If a field is not present in the message return it absent or null.
+Examples:
+Input: "action movie in Hindi from 2025"
+Output: {"genre":"action","language":"Hindi","year":2025}
+Input: "Find me a sci-fi"
+Output: {"genre":"sci-fi"}
+Respond with only the JSON object and nothing else.
+`;
+
+// friendly responder prompt (natural, short)
+const friendPrompt = `
+You are "Uncle Film Finder", a friendly movie buddy. Keep replies short, casual, and helpful.
+When asked a follow-up question, ask one concise question only.
+When summarizing known preferences, be friendly and brief.
+`;
+
+// helper: try parse JSON, fallback to regex year extraction
+function safeParseExtraction(raw) {
+  if (!raw) return {};
+  raw = raw.trim();
+  // try JSON first
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    // attempt to extract genre/language/year via simple regex heuristics
+    const result = {};
+    // year: four digits 1900-2099
+    const yearMatch = raw.match(/(19|20)\d{2}/);
+    if (yearMatch) result.year = parseInt(yearMatch[0], 10);
+    // language guess: common languages capitalized or 'hindi', 'english'
+    const langMatch = raw.match(/\b(Hindi|English|Tamil|Telugu|Malayalam|Kannada|Marathi|Bengali)\b/i);
+    if (langMatch) result.language = langMatch[0];
+    // genre guess: common genres
+    const genreMatch = raw.match(/\b(action|comedy|drama|sci-?fi|horror|thriller|romance|documentary|animation)\b/i);
+    if (genreMatch) result.genre = genreMatch[0].toLowerCase().replace("scifi", "sci-fi");
+    return result;
+  }
+}
 
 router.post("/chat", async (req, res) => {
   const { message, sessionId } = req.body;
-
-  if (!sessionId) {
-    return res.status(400).json({ reply: "Session ID is required." });
-  }
-
-  if (!message || typeof message !== "string" || message.trim() === "") {
+  if (!sessionId) return res.status(400).json({ reply: "Session ID is required." });
+  if (!message || typeof message !== "string" || message.trim() === "")
     return res.status(400).json({ reply: "Message cannot be empty." });
-  }
 
-  conversationMemory[sessionId] = conversationMemory[sessionId] || {
-    history: [],
-    filled: {},
-  };
-
-  const memory = conversationMemory[sessionId];
-  memory.history.push({ role: "user", content: message });
+  const msg = message.trim();
+  const state = conversationState[sessionId] || { genre: null, language: null, year: null, mode: "collecting", lastMovie: null };
+  conversationState[sessionId] = state;
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: "llama3-70b-8192",
-      messages: [
-        {
-  role: "system",
-  content: `
-You are a helpful movie assistant.
+    // Special-case: user asks for more/details about last recommendation
+    if (state.mode === "recommending" && /^(more|details|tell me more|info|i want to know more)/i.test(msg)) {
+      if (state.lastMovie) {
+        const details = state.lastMovie.overview || state.lastMovie.description || "No extra details available.";
+        return res.json({ reply: `More on ${state.lastMovie.title}: ${details}` });
+      }
+    }
 
-Your job is to recommend movies based on only two user preferences:
-1. Genre (e.g., action, romance, horror)
-2. Language (e.g., English, Hindi)
+    // 1) Run extractor
+    let extracted = {};
+    try {
+      const extractionResp = await groq.chat.completions.create({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: extractorPrompt },
+          { role: "user", content: msg }
+        ],
+        temperature: 0,
+        max_tokens: 200,
+      });
+      const raw = extractionResp.choices?.[0]?.message?.content || "";
+      extracted = safeParseExtraction(raw);
+    } catch (e) {
+      // fallback: attempt heuristic extraction on the raw user message
+      extracted = safeParseExtraction(msg);
+    }
 
-Optionally, also support:
-- Year (e.g., released last year or in 2023)
-- High rating (minimum vote average)
+    // 2) Update state with extracted values (year optional)
+    if (extracted.genre) state.genre = extracted.genre;
+    if (extracted.language) state.language = extracted.language;
+    if (extracted.year) {
+      // sanitize year: must be between 1888 and 2100
+      const y = parseInt(extracted.year, 10);
+      if (!Number.isNaN(y) && y >= 1888 && y <= 2100) state.year = y;
+    }
 
-Once you know both, respond strictly in this JSON format:
-{
-  "intent": "recommend_movie",
-  "genre": "action",
-  "language": "English",
-  "year": 2024,               // optional
-  "minRating": 7.5            // optional
-}
+    // 3) If we have both genre and language, call recommender
+    if (state.genre && state.language) {
+      // pass year only if present
+      const query = { genre: state.genre, language: state.language };
+      if (state.year) query.year = state.year;
 
-⚠️ Do NOT include any explanation or extra text around the JSON.
-⚠️ Only return the JSON object when you're confident both genre and language are known.
-⚠️ Make sure it’s valid JSON (no trailing commas, correct quotes, etc.)
+      const movies = await getRecommendedMovies(query);
+      // store first movie for follow-ups
+      state.mode = "recommending";
+      state.lastMovie = Array.isArray(movies) && movies.length ? movies[0] : null;
 
-Do not ask about duration or mood. Until both genre and language are known, ask one follow-up question to get the missing info.
+      // clear state so next user search starts fresh
+      delete conversationState[sessionId];
 
-If the user already has movie suggestions and asks “which one should I watch?”, choose one from the previous list and explain why it might be a good pick for them.
+      return res.json({ reply: movies });
+    }
 
-You may also engage in small talk or answer general queries if the user is not asking about movies.
-`
+    // 4) Determine missing pieces and ask friendly question
+    const missing = [];
+    if (!state.genre) missing.push("genre");
+    if (!state.language) missing.push("language");
 
-}
-,
-        ...memory.history
-      ],
-      temperature: 0.7
+    // create a short friendly context summary
+    const contextParts = [];
+    if (state.genre) contextParts.push(`genre: ${state.genre}`);
+    if (state.language) contextParts.push(`language: ${state.language}`);
+    if (state.year) contextParts.push(`year: ${state.year}`);
+
+    const contextSummary = contextParts.length ? `I know ${contextParts.join(", ")}.` : "";
+
+    // friendly prompt to produce a natural follow-up
+    const friendMessages = [
+      { role: "system", content: friendPrompt },
+      { role: "assistant", content: contextSummary },
+      { role: "user", content: msg }
+    ];
+
+    const friendlyResp = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: friendMessages,
+      temperature: 0.8,
+      max_tokens: 150,
     });
 
-    const reply = completion.choices[0]?.message?.content;
-    memory.history.push({ role: "assistant", content: reply });
+    const friendlyReply = friendlyResp.choices?.[0]?.message?.content || "Nice — tell me a bit more so I can help.";
+    return res.json({ reply: friendlyReply });
 
-    try {
-      const parsed = JSON.parse(reply);
-      if (parsed.intent === "recommend_movie") {
-  const movies = await getRecommendedMovies(parsed);
-  memory.lastMovies = movies; // ✅ store recommended list
-  return res.json({ reply: movies });
-}
-if (
-  message.toLowerCase().includes("which one should i watch") &&
-  memory.lastMovies &&
-  memory.lastMovies.length > 0
-) {
-  const bestMovie = memory.lastMovies.reduce((a, b) =>
-    (a.rating || 0) > (b.rating || 0) ? a : b
-  );
-
-  return res.json({
-    reply: `I recommend watching **${bestMovie.title}** – it has one of the highest ratings and fits your preferences well!`
-  });
-}
-
-
-    } catch (_) {}
-
-    return res.json({ reply });
   } catch (err) {
-    console.error("Groq Error:", err);
-    return res.status(500).json({ reply: "❌ Sorry, something went wrong." });
+    console.error("Groq API Error:", err);
+    return res.status(500).json({ reply: "❌ Sorry, something went wrong with the AI." });
   }
 });
 
 export default router;
+
