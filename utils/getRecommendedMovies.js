@@ -3,43 +3,43 @@ import { fetchWithRetry } from "./fetchWithRetry.js";
 dotenv.config();
 
 const genrePairs = [
-  ["action", 28],
-  ["adventure", 12],
-  ["animation", 16],
-  ["comedy", 35],
-  ["crime", 80],
-  ["documentary", 99],
-  ["drama", 18],
-  ["family", 10751],
-  ["fantasy", 14],
-  ["history", 36],
-  ["horror", 27],
-  ["music", 10402],
-  ["mystery", 9648],
-  ["romance", 10749],
-  ["scifi", 878],
-  ["thriller", 53],
-  ["war", 10752],
-  ["western", 37],
+  ["action", 28], ["adventure", 12], ["animation", 16], ["comedy", 35],
+  ["crime", 80], ["documentary", 99], ["drama", 18], ["family", 10751],
+  ["fantasy", 14], ["history", 36], ["horror", 27], ["music", 10402],
+  ["mystery", 9648], ["romance", 10749], ["science fiction", 878], ["sci-fi", 878],
+  ["thriller", 53], ["war", 10752], ["western", 37],
 ];
 
 const languageMap = {
-  english: "en",
-  hindi: "hi",
-  spanish: "es",
-  french: "fr",
-  japanese: "ja",
-  korean: "ko"
+  english: "en", hindi: "hi", spanish: "es", french: "fr",
+  japanese: "ja", korean: "ko", tamil: "ta", telugu: "te",
 };
 
-const GENRE_MAP = Object.fromEntries(genrePairs);
-const REVERSE_GENRE_MAP = Object.fromEntries(
-  genrePairs.map(([k, v]) => [v, k])
-);
+const GENRE_MAP = new Map(genrePairs);
+const REVERSE_GENRE_MAP = new Map(genrePairs.map(([k, v]) => [v, k]));
+
+// --- NEW, SMARTER FUNCTION TO FIND GENRE ---
+function findGenreId(genreText = "") {
+  const text = genreText.toLowerCase();
+  // Look for an exact match first
+  if (GENRE_MAP.has(text)) {
+    return GENRE_MAP.get(text);
+  }
+  // If no exact match, search for a keyword within the text
+  for (const [keyword, id] of genrePairs) {
+    if (text.includes(keyword)) {
+      return id;
+    }
+  }
+  return ""; // Return empty if no keyword is found
+}
+
 
 function buildDiscoverUrl({ genre, language, year, minRating }) {
   const TMDB_KEY = process.env.TMDB_API_KEY;
-  const genreId = GENRE_MAP[(genre || "").toLowerCase()] || "";
+  
+  // --- USE THE NEW, SMARTER FUNCTION ---
+  const genreId = findGenreId(genre);
   const langCode = languageMap[(language || "").toLowerCase()] || "en";
 
   let url =
@@ -51,8 +51,7 @@ function buildDiscoverUrl({ genre, language, year, minRating }) {
     `&vote_count.gte=100`;
 
   if (year) url += `&primary_release_year=${year}`;
-  if (minRating) url += `&vote_count.gte=50`; // Less restrictive
-
+  if (minRating) url += `&vote_average.gte=${minRating}`; // Corrected parameter
 
   return url;
 }
@@ -61,7 +60,12 @@ function buildDiscoverUrl({ genre, language, year, minRating }) {
 export async function getRecommendedMovies(prefs) {
   try {
     const url = buildDiscoverUrl(prefs);
+    console.log("Fetching TMDB URL:", url); // Add this for debugging
     const data = await fetchWithRetry(url);
+    if (!data.results) {
+        console.error("No results found in TMDB response:", data);
+        return [];
+    }
     return (data.results || []).slice(0, 6).map((movie) => ({
       id: movie.id,
       title: movie.title,
@@ -70,10 +74,11 @@ export async function getRecommendedMovies(prefs) {
         : null,
       rating: movie.vote_average,
       language: movie.original_language,
-      genres: movie.genre_ids?.map((id) => REVERSE_GENRE_MAP[id] || id)
+      genres: movie.genre_ids?.map((id) => REVERSE_GENRE_MAP.get(id) || id)
     }));
   } catch (err) {
     console.error("TMDB fetch error:", err);
     return [];
   }
 }
+

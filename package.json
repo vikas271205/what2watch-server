@@ -8,6 +8,7 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
@@ -15,9 +16,10 @@
     "express-rate-limit": "^6.7.0",
     "firebase": "^11.10.0",
     "firebase-admin": "^13.4.0",
-    "groq-sdk": "^0.7.0",
+    "grok-sdk": "^0.0.1-security",
+    "groq-sdk": "^0.33.0",
     "node-cache": "^5.1.2",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"
