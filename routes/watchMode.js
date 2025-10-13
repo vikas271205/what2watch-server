@@ -87,29 +87,71 @@ router.get("/sources/:id", async (req, res) => {
     const response = await fetch(url);
     const data = await response.json();
 
-    // 🌍 Group by platform name
-    const grouped = data
-      .filter((s) => s.web_url && s.type === "sub")
-      .reduce((acc, curr) => {
-        const key = curr.name.toLowerCase();
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(curr);
-        return acc;
-      }, {});
+    // Only keep popular Indian platforms + sub/free
+    const allowedPlatforms = {
+      26: { name: "Prime Video", color: "#00A8E1" },
+      203: { name: "Netflix", color: "#E50914" },
+      372: { name: "Disney+", color: "#113CCF" },
+      371: { name: "Apple TV+", color: "#A2AAAD" },
+      122: { name: "Hotstar", color: "#091F92" },
+      387: { name: "HBO Max", color: "#5A2D82" },
+      157: { name: "Hulu", color: "#1CE783" },
+    };
 
-    // 🇮🇳 Prefer Indian region if available
-    const selected = Object.values(grouped).map((entries) => {
+    // Filter valid sources
+    let filtered = (data || []).filter(
+      (s) => allowedPlatforms[s.source_id] && (s.type === "sub" || s.type === "free")
+    );
+
+    // Group by source_id
+    const grouped = filtered.reduce((acc, curr) => {
+      const key = curr.source_id;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(curr);
+      return acc;
+    }, {});
+
+    // Prioritize Indian region if available
+    let selected = Object.values(grouped).map((entries) => {
       const india = entries.find((e) => e.region === "IN");
       return india || entries[0];
     });
 
+    // Add Hotstar fallback for Disney+ India content
+    selected.forEach((s) => {
+      if (s.source_id === 372 && s.region === "IN") {
+        selected.push({
+          source_id: 122,
+          name: "Hotstar",
+          color: allowedPlatforms[122].color,
+          web_url: s.web_url,
+          type: s.type,
+          region: "IN",
+        });
+      }
+    });
+
+    // Remove duplicates after adding Hotstar
+    selected = selected.filter(
+      (v, i, a) => a.findIndex((t) => t.source_id === v.source_id) === i
+    );
+
+    // Transform to just name + color + web_url
+    const transformed = selected.map((s) => ({
+      source_id: s.source_id,
+      name: allowedPlatforms[s.source_id].name,
+      color: allowedPlatforms[s.source_id].color,
+      web_url: s.web_url,
+      type: s.type,
+    }));
+
     await docRef.set({
-      sources: selected,
+      sources: transformed,
       updatedAt: new Date().toISOString(),
     });
 
-    console.log(`✅ Stored India-prioritized sources for ID ${id}`, selected.map(s => `${s.name} (${s.region})`));
-    return res.json(selected);
+    console.log(`✅ Stored filtered sources for ID ${id}`, transformed.map(s => s.name));
+    return res.json(transformed);
   } catch (err) {
     console.error("❌ Error fetching streaming sources:", err);
     return res.status(500).json({ error: "Failed to fetch streaming sources" });
@@ -117,3 +159,4 @@ router.get("/sources/:id", async (req, res) => {
 });
 
 export { router as watchmodeRouter };
+
