@@ -1,3 +1,5 @@
+// server/routes/tmdb.js
+
 import express from "express";
 import { fetchWithRetry } from "../utils/fetchWithRetry.js";
 import NodeCache from "node-cache";
@@ -120,13 +122,12 @@ router.get("/byGenre", async (req, res) => {
   const { genreId, page } = req.query;
   if (!genreId) return res.status(400).json({ error: "genreId is required" });
 
-  // Generate a random page number between 1–20 if not provided
   const pageNumber = page ? Number(page) : Math.floor(Math.random() * 20) + 1;
 
   try {
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=100&include_adult=false&language=en-US&page=${pageNumber}`;
 
-    const data = await getCachedOrFetch(`genre_${genreId}_p${pageNumber}`, url, 3600); // Optional: cache 1 hour
+    const data = await getCachedOrFetch(`genre_${genreId}_p${pageNumber}`, url, 3600);
     res.json(data.results);
   } catch (err) {
     console.error("TMDB byGenre Error:", err);
@@ -261,7 +262,6 @@ router.get('/tv/:id/similar', async (req, res) => {
   }
 });
 
-
 router.get("/tv/:id/credits", async (req, res) => {
   const { id } = req.params;
   const cacheKey = `tv_credits_${id}`;
@@ -274,6 +274,21 @@ router.get("/tv/:id/credits", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch TV credits" });
   }
 });
+
+// --- THIS IS THE NEW ROUTE FOR SEASONS/EPISODES ---
+router.get("/tv/:id/season/:season_number", async (req, res) => {
+  const { id, season_number } = req.params;
+  const cacheKey = `tv_season_${id}_${season_number}`;
+  try {
+    const url = `${BASE_URL}/tv/${id}/season/${season_number}?api_key=${API_KEY}&language=en-US`;
+    const data = await getCachedOrFetch(cacheKey, url);
+    res.json(data);
+  } catch (err) {
+    console.error("TMDB TV Season Detail Error:", err);
+    res.status(500).json({ error: "Failed to fetch TV season details" });
+  }
+});
+// --- END NEW ROUTE ---
 
 router.get("/genre/tv", async (_req, res) => {
   const cacheKey = "tv_genres";

@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
+
 import { recommendRouter } from "./routes/recommend.js";
 import aiRoutes from "./routes/ai.js";
 import { omdbRouter } from "./routes/omdb.js";
@@ -9,6 +11,8 @@ import { tmdbRouter } from "./routes/tmdb.js";
 import { watchmodeRouter } from "./routes/watchMode.js";
 import { discoverRouter } from "./routes/tmdbDiscover.js";
 import rewriteOverviewRouter from "./routes/rewriteOverview.js";
+import reviewsRouter from "./routes/reviews.js";
+import ratingsRouter from "./routes/ratings.js";
 dotenv.config();
 
 const app = express();
@@ -46,6 +50,17 @@ app.use("/api/watchmode", watchmodeRouter);
 app.use("/api/tmdb/discover", discoverRouter);
 app.use("/api/recommend", recommendRouter);
 app.use("/api", rewriteOverviewRouter);
+app.use("/api", reviewsRouter);
+app.use("/api", ratingsRouter);
+
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // Limit each IP to 100 requests per window
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+app.use('/api', limiter);
+
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });

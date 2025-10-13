@@ -3,7 +3,6 @@ import express from "express";
 import { Groq } from "groq-sdk";
 import dotenv from "dotenv";
 import { adminDb } from "../utils/firebaseAdmin.js";
-
 import admin from "firebase-admin";
 
 dotenv.config();
@@ -11,66 +10,62 @@ const router = express.Router();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Using a more robust slugify function
 function slugify(text = "") {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 100);
+  const a = 'àáâäæãåāăąçćčđďèéêëēėęěğǵḧîïíīįìłḿñńǹňôöòóœøōõőṕŕřßśšşșťțûüùúūǘůűųẃẍÿýžźż·/_,:;'
+  const b = 'aaaaaaaaaacccddeeeeeeeegghiiiiiilmnnnnoooooooooprrsssssttuuuuuuuuuwxyyzzz------'
+  const p = new RegExp(a.split('').join('|'), 'g')
+
+  return text.toString().toLowerCase()
+    .replace(/\s+/g, '-') // Replace spaces with -
+    .replace(p, c => b.charAt(a.indexOf(c))) // Replace special characters
+    .replace(/&/g, '-and-') // Replace & with 'and'
+    .replace(/[^\w\-]+/g, '') // Remove all non-word chars
+    .replace(/\-\-+/g, '-') // Replace multiple - with single -
+    .replace(/^-+/, '') // Trim - from start of text
+    .replace(/-+$/, '') // Trim - from end of text
 }
 
-router.post("/ai/rewrite-overview", async (req, res) => {
-  const { title, overview, genre, type = "movie", year } = req.body;
 
-  if (!title || !overview) {
-    return res.status(400).json({ error: "Missing title or overview" });
+router.post("/ai/rewrite-overview", async (req, res) => {
+  const { title, overview, genre, type = "movie", year, tmdbId } = req.body; // Added tmdbId for a perfect cache key
+
+  if (!title || !overview || !tmdbId) {
+    return res.status(400).json({ error: "Missing title, overview, or tmdbId" });
   }
 
-  const titleSlug = slugify(title);
-  const cacheId = `${type}_${titleSlug}_${year || "unknown"}`;
+  // A perfect unique key using the content type and TMDB ID
+  const cacheId = `${type}_${tmdbId}`;
   const docRef = adminDb.collection("overview_cache").doc(cacheId);
 
   try {
-    // Check Firestore cache
     const docSnap = await docRef.get();
     if (docSnap.exists) {
+      console.log(`[Cache] HIT for ${cacheId}`);
       return res.json({ rewritten: docSnap.data().rewritten });
     }
+    console.log(`[Cache] MISS for ${cacheId}`);
 
-    // Rewrite via Groq
-const prompt = `
-You're tasked with creating an irresistible movie hook that makes viewers eager to watch.
+    // --- REFINED PROMPT ---
+    // Focuses on creating a short, punchy "hook"
+    const prompt = `
+      You are a movie marketing expert who writes punchy, exciting hooks.
+      Your task is to take the provided movie details and create a 1-2 sentence hook (max 30 words).
+      This hook should grab attention and make someone instantly want to know more.
+      Focus on the core conflict, the unique premise, or the emotional stakes.
+      Do not explain or summarize. Just provide the hook.
 
-First, identify the unique elements of the movie from the overview: the setting, key characters, central conflict, or any twists. For franchise movies, highlight how this installment connects to or differs from previous ones.
+      Title: ${title}
+      Genre: ${genre || "N/A"}
+      Original Overview: ${overview}
 
-Then, craft a hook that is 2-3 sentences long (30-50 words), written in a casual, enthusiastic tone, as if you're recommending the movie to a friend. Include specific details from the overview, like main characters, setting, or conflict, to make it stand out.
-
-To make it memorable, use techniques like:
-- Wordplay or puns related to the movie's theme.
-- Contrasts or contradictions to create intrigue.
-- Rhetorical questions to spark curiosity.
-- Highlighting stakes or emotional impact.
-
-Avoid generic phrases like "in a world," "nothing will ever be the same," or "one last chance." Ensure the hook is tailored to this movie.
-
-For inspiration:
-- Jurassic Park: "Dinosaurs are back, and they're ready to roar on an island adventure you won't forget."
-- The Matrix: "What if reality's a lie? One guy’s about to unplug the truth in a mind-bending fight."
-- Alien: "On a distant ship, a deadly creature’s loose. Can the crew survive the ultimate nightmare?"
-
-Aim for a hook that's iconic and specific to this movie.
-
-Title: ${title}
-Genre: ${genre || "N/A"}
-Original Overview: ${overview}
-
-Provide only the rewritten hook—no explanations, no quotes.
-`;
+      Provide ONLY the rewritten hook. No quotes, no preamble.
+    `;
 
     const completion = await groq.chat.completions.create({
-      model: "llama3-70b-8192",
+      model: "llama-3.1-8b-instant", // Switched to a faster model, great for this task
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.95,
+      temperature: 0.8,
     });
 
     const rewritten = completion.choices[0]?.message?.content?.trim();
@@ -78,19 +73,20 @@ Provide only the rewritten hook—no explanations, no quotes.
     if (rewritten) {
       await docRef.set({
         title,
-        overview,
-        genre,
         rewritten,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
-
       return res.json({ rewritten });
     } else {
-      return res.status(500).json({ error: "No rewritten content returned." });
+      // If AI fails, gracefully fall back to a shortened original overview
+      const fallback = overview.split('. ')[0] + '.';
+      return res.json({ rewritten: fallback });
     }
   } catch (err) {
-    console.error("Groq Rewrite Error:", err.message);
-    return res.status(500).json({ error: "Failed to rewrite overview" });
+    console.error(`[Groq Error for ${title}]:`, err.message);
+    // Gracefully fallback on error
+    const fallback = overview.split('. ')[0] + '.';
+    return res.json({ rewritten: fallback });
   }
 });
 
