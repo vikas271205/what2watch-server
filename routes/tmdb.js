@@ -207,18 +207,24 @@ router.get("/person/:id", async (req, res) => {
   }
 });
 
-router.get("/person/:id/movies", async (req, res) => {
+// --- ADDED: New route for combined credits, as requested by the redesigned CastDetail page ---
+router.get("/person/:id/combined_credits", async (req, res) => {
   const { id } = req.params;
-  const cacheKey = `person_movies_${id}`;
+  const cacheKey = `person_combined_credits_${id}`;
   try {
-    const url = `${BASE_URL}/person/${id}/movie_credits?api_key=${API_KEY}`;
+    const url = `${BASE_URL}/person/${id}/combined_credits?api_key=${API_KEY}`;
     const data = await getCachedOrFetch(cacheKey, url);
     res.json(data);
   } catch (err) {
-    console.error("TMDB Person Movies Error:", err);
-    res.status(500).json({ error: "Failed to fetch person movies" });
+    console.error("TMDB Person Combined Credits Error:", err);
+    res.status(500).json({ error: "Failed to fetch person's combined credits" });
   }
 });
+
+// --- REMOVED: This route is replaced by combined_credits and is no longer used by the frontend ---
+// router.get("/person/:id/movies", async (req, res) => {
+//   ...
+// });
 
 // ------------------------------------------------------
 // 📺 TV ROUTES

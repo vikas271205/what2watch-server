@@ -31,6 +31,8 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
+  // --- FIX: Explicitly allow DELETE, PUT, POST, and GET methods ---
+  methods: ['GET', 'POST', 'DELETE', 'PUT'],
   credentials: true,
 };
 
