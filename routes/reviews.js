@@ -11,12 +11,11 @@ import admin from "firebase-admin";
 const router = express.Router();
 const profanityFilter = new Filter();
 
-// GET all reviews for a movie OR tv show
+// GET all reviews for a movie OR tv show (No changes needed here)
 router.get("/:mediaType/:id/reviews", async (req, res) => {
   try {
     const { mediaType, id } = req.params;
     const reviewsRef = adminDb.collection('reviews');
-    // NOTE: This query now needs a composite index on mediaType, mediaId, and createdAt
     const snapshot = await reviewsRef.where('mediaType', '==', mediaType).where('mediaId', '==', id).orderBy('createdAt', 'desc').get();
 
     if (snapshot.empty) {
@@ -30,7 +29,7 @@ router.get("/:mediaType/:id/reviews", async (req, res) => {
   }
 });
 
-// POST a new review for a movie OR tv show
+// POST a new review for a movie OR tv show (No changes needed here)
 router.post(
     "/:mediaType/:id/review",
     authMiddleware,
@@ -59,7 +58,34 @@ router.post(
     }
 );
 
-// Admin-only route to DELETE a review (this route is generic and needs no changes)
-router.delete("/review/:reviewId", authMiddleware, verifyAdmin, async (req, res) => { /* ... same code */ });
+// --- FIX: Updated DELETE route to allow author or admin to delete ---
+router.delete("/review/:reviewId", authMiddleware, async (req, res) => {
+    const { reviewId } = req.params;
+    // req.user is attached by authMiddleware. We assume it contains uid and a custom claim like 'isAdmin'.
+    const { uid, isAdmin } = req.user;
+
+    try {
+        const reviewRef = adminDb.collection('reviews').doc(reviewId);
+        const doc = await reviewRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Review not found." });
+        }
+
+        const reviewData = doc.data();
+
+        // Authorization check: User must be the author OR an admin to delete.
+        if (reviewData.userId !== uid && !isAdmin) {
+            return res.status(403).json({ error: "You are not authorized to delete this review." });
+        }
+
+        await reviewRef.delete();
+        res.status(200).json({ message: "Review deleted successfully." });
+
+    } catch (error) {
+        console.error("Error deleting review:", error);
+        res.status(500).json({ error: "Failed to delete review." });
+    }
+});
 
 export default router;
