@@ -17,14 +17,22 @@ const searchLimiter = rateLimit({
   message: { error: "Rate limit exceeded for search. Try again later." },
 });
 
-const getCachedOrFetch = async (cacheKey, url) => {
+const tmdbLimiter= rateLimit({
+	windowMs:60*1000,
+	max:60,
+	message: {error :"Too many requests. Please slow down.."},
+});
+
+router.use(tmdbLimiter);
+
+const getCachedOrFetch = async (cacheKey, url,ttl=3600) => {
   if (cache.has(cacheKey)) {
     console.log(`✅ Cache hit: ${cacheKey}`);
     return cache.get(cacheKey);
   }
   console.log(`❌ Cache miss: ${cacheKey}`);
   const data = await fetchWithRetry(url);
-  cache.set(cacheKey, data);
+  cache.set(cacheKey, data,ttl);
   return data;
 };
 
@@ -39,8 +47,11 @@ router.get("/search", searchLimiter, async (req, res) => {
   const cacheKey = `search_${query}`;
   try {
     const url = `${BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=en-US&include_adult=false`;
-    const data = await getCachedOrFetch(cacheKey, url);
-    res.json(data);
+    const data = await getCachedOrFetch(cacheKey, url,300);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
+    res.json(data.results);
   } catch (err) {
     console.error("TMDB Search Error:", err);
     res.status(500).json({ error: "Failed to fetch TMDB search data" });
@@ -55,7 +66,10 @@ router.get("/trending", async (req, res) => {
   const cacheKey = `trending_${time}_${page}`;
   try {
     const url = `${BASE_URL}/trending/all/${time}?api_key=${API_KEY}&page=${page}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,900);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Trending Error:", err);
@@ -68,7 +82,10 @@ router.get("/discover", async (req, res) => {
   const cacheKey = `discover_${page}`;
   try {
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&sort_by=popularity.desc&page=${page}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,1800);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Discover Error:", err);
@@ -81,7 +98,10 @@ router.get("/discover/bollywood", async (req, res) => {
   const cacheKey = `discover_bollywood_${page}`;
   try {
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc&page=${page}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,1800);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Bollywood Discover Error:", err);
@@ -94,7 +114,10 @@ router.get("/discover/hollywood", async (req, res) => {
   const cacheKey = `discover_hollywood_${page}`;
   try {
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&region=US&sort_by=popularity.desc&page=${page}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,1800);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.results);
   } catch (err) {
     console.error("TMDB Hollywood Discover Error:", err);
@@ -109,7 +132,10 @@ router.get("/genres", async (_req, res) => {
   const cacheKey = "genres";
   try {
     const url = `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en-US`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.genres);
   } catch (err) {
     console.error("TMDB Genres Error:", err);
@@ -127,7 +153,10 @@ router.get("/byGenre", async (req, res) => {
   try {
     const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=100&include_adult=false&language=en-US&page=${pageNumber}`;
 
-    const data = await getCachedOrFetch(`genre_${genreId}_p${pageNumber}`, url, 3600);
+    const data = await getCachedOrFetch(`genre_${genreId}_p${pageNumber}`, url, 1800);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data.results);
   } catch (err) {
     console.error("TMDB byGenre Error:", err);
@@ -144,7 +173,10 @@ router.get("/movie/:id", async (req, res) => {
   const cacheKey = `movie_${id}`;
   try {
     const url = `${BASE_URL}/movie/${id}?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Detail Error:", err);
@@ -157,7 +189,10 @@ router.get("/movie/:id/videos", async (req, res) => {
   const cacheKey = `movie_videos_${id}`;
   try {
     const url = `${BASE_URL}/movie/${id}/videos?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,3600);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Videos Error:", err);
@@ -170,7 +205,10 @@ router.get("/movie/:id/credits", async (req, res) => {
   const cacheKey = `movie_credits_${id}`;
   try {
     const url = `${BASE_URL}/movie/${id}/credits?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,3600);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Movie Credits Error:", err);
@@ -183,7 +221,10 @@ router.get("/movie/:id/similar", async (req, res) => {
   const cacheKey = `movie_similar_${id}`;
   try {
     const url = `${BASE_URL}/movie/${id}/similar?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,3600);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Similar Movies Error:", err);
@@ -199,7 +240,10 @@ router.get("/person/:id", async (req, res) => {
   const cacheKey = `person_${id}`;
   try {
     const url = `${BASE_URL}/person/${id}?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Person Error:", err);
@@ -213,7 +257,10 @@ router.get("/person/:id/combined_credits", async (req, res) => {
   const cacheKey = `person_combined_credits_${id}`;
   try {
     const url = `${BASE_URL}/person/${id}/combined_credits?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Person Combined Credits Error:", err);
@@ -234,7 +281,10 @@ router.get("/tv/:id", async (req, res) => {
   const cacheKey = `tv_${id}`;
   try {
     const url = `${BASE_URL}/tv/${id}?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Detail Error:", err);
@@ -247,7 +297,10 @@ router.get("/tv/:id/videos", async (req, res) => {
   const cacheKey = `tv_videos_${id}`;
   try {
     const url = `${BASE_URL}/tv/${id}/videos?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,3600);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Videos Error:", err);
@@ -256,15 +309,18 @@ router.get("/tv/:id/videos", async (req, res) => {
 });
 
 router.get('/tv/:id/similar', async (req, res) => {
+  const { id } = req.params;
+  const cacheKey= `tv_similar_${id}`;
   try {
-    const { id } = req.params;
     const url = `https://api.themoviedb.org/3/tv/${id}/similar?api_key=${process.env.TMDB_API_KEY}&language=en-US&page=1`;
-    const response = await fetch(url);
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    console.error("Error fetching similar TV shows:", err);
-    res.status(500).json({ error: "Failed to fetch similar TV shows" });
+    const data = await getCachedOrFetch(cacheKey,url,1800);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
+    res.json(data.results);
+  } catch(err){
+  	console.error("TMDB Similar movie error: ",err);
+  	res.status(500).json({error :"Failed to fetch similar movies from TMDB"});  	
   }
 });
 
@@ -273,7 +329,10 @@ router.get("/tv/:id/credits", async (req, res) => {
   const cacheKey = `tv_credits_${id}`;
   try {
     const url = `${BASE_URL}/tv/${id}/credits?api_key=${API_KEY}`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Credits Error:", err);
@@ -287,7 +346,10 @@ router.get("/tv/:id/season/:season_number", async (req, res) => {
   const cacheKey = `tv_season_${id}_${season_number}`;
   try {
     const url = `${BASE_URL}/tv/${id}/season/${season_number}?api_key=${API_KEY}&language=en-US`;
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Season Detail Error:", err);
@@ -301,6 +363,9 @@ router.get("/genre/tv", async (_req, res) => {
   try {
     const url = `${BASE_URL}/genre/tv/list?api_key=${API_KEY}&language=en-US`;
     const data = await getCachedOrFetch(cacheKey, url);
+    if(!data){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB TV Genre Error:", err);
@@ -323,7 +388,10 @@ router.get("/discover/tv", async (req, res) => {
   const cacheKey = `discover_tv_${genreParam || "all"}_${language || "all"}_${year || "all"}_${page}`;
 
   try {
-    const data = await getCachedOrFetch(cacheKey, url);
+    const data = await getCachedOrFetch(cacheKey, url,86400);
+    if(!data || !data.results){
+    	return res.status(500).json({error :"Invalid response from TMDB"});
+    }
     res.json(data);
   } catch (err) {
     console.error("TMDB Discover TV Error:", err);

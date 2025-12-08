@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
 import { recommendRouter } from "./routes/recommend.js";
-import aiRoutes from "./routes/ai.js";
+
 import { omdbRouter } from "./routes/omdb.js";
 import { tmdbRouter } from "./routes/tmdb.js";
 import { watchmodeRouter } from "./routes/watchMode.js";
@@ -45,7 +45,7 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Your routes
-app.use("/api", aiRoutes);
+
 app.use("/api/omdb", omdbRouter);
 app.use("/api/tmdb", tmdbRouter);
 app.use("/api/watchmode", watchmodeRouter);
