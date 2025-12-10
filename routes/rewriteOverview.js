@@ -10,31 +10,15 @@ const router = express.Router();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Using a more robust slugify function
-function slugify(text = "") {
-  const a = 'àáâäæãåāăąçćčđďèéêëēėęěğǵḧîïíīįìłḿñńǹňôöòóœøōõőṕŕřßśšşșťțûüùúūǘůűųẃẍÿýžźż·/_,:;'
-  const b = 'aaaaaaaaaacccddeeeeeeeegghiiiiiilmnnnnoooooooooprrsssssttuuuuuuuuuwxyyzzz------'
-  const p = new RegExp(a.split('').join('|'), 'g')
-
-  return text.toString().toLowerCase()
-    .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(p, c => b.charAt(a.indexOf(c))) // Replace special characters
-    .replace(/&/g, '-and-') // Replace & with 'and'
-    .replace(/[^\w\-]+/g, '') // Remove all non-word chars
-    .replace(/\-\-+/g, '-') // Replace multiple - with single -
-    .replace(/^-+/, '') // Trim - from start of text
-    .replace(/-+$/, '') // Trim - from end of text
-}
-
-
 router.post("/ai/rewrite-overview", async (req, res) => {
-  const { title, overview, genre, type = "movie", year, tmdbId } = req.body; // Added tmdbId for a perfect cache key
+  console.log("📥 AI request received:", req.body);
+
+  const { title, overview, genre, type = "movie", tmdbId } = req.body;
 
   if (!title || !overview || !tmdbId) {
     return res.status(400).json({ error: "Missing title, overview, or tmdbId" });
   }
 
-  // A perfect unique key using the content type and TMDB ID
   const cacheId = `${type}_${tmdbId}`;
   const docRef = adminDb.collection("overview_cache").doc(cacheId);
 
@@ -42,52 +26,95 @@ router.post("/ai/rewrite-overview", async (req, res) => {
     const docSnap = await docRef.get();
     if (docSnap.exists) {
       console.log(`[Cache] HIT for ${cacheId}`);
-      return res.json({ rewritten: docSnap.data().rewritten });
+      return res.json(docSnap.data());
     }
     console.log(`[Cache] MISS for ${cacheId}`);
 
-    // --- REFINED PROMPT ---
-    // Focuses on creating a short, punchy "hook"
+    // ---------- MULTI-STYLE PROMPT ----------
     const prompt = `
-      You are a movie marketing expert who writes punchy, exciting hooks.
-      Your task is to take the provided movie details and create a 1-2 sentence hook (max 30 words).
-      This hook should grab attention and make someone instantly want to know more.
-      Focus on the core conflict, the unique premise, or the emotional stakes.
-      Do not explain or summarize. Just provide the hook.
+You are an expert Hollywood marketing writer.
 
-      Title: ${title}
-      Genre: ${genre || "N/A"}
-      Original Overview: ${overview}
+Generate the following FIVE outputs for the movie/TV show below.
 
-      Provide ONLY the rewritten hook. No quotes, no preamble.
+### 1. STANDARD
+A polished, clear, cinematic 3–4 sentence synopsis. No spoilers.
+
+### 2. NO-SPOILERS SYNOPSIS
+A completely spoiler-safe version. Less detail, more tone.
+
+### 3. ONE-LINE SUMMARY
+A 1–2 sentence punchy one-liner (max 22 words). Feels like an elevator pitch.
+
+### 4. TRAILER-STYLE
+A dramatic, hype-filled summary like the narration of a movie trailer.
+
+### 5. WHY YOU WILL LIKE THIS
+List 3–5 bullets explaining why a viewer would enjoy this title.
+Avoid generic reasons—be specific to the film/show.
+
+------------------------------------------------
+Title: ${title}
+Genres: ${genre || "Unknown"}
+TMDB Overview: ${overview}
+------------------------------------------------
+
+Return strictly in JSON using this structure:
+{
+  "standard": "...",
+  "noSpoilers": "...",
+  "oneLine": "...",
+  "trailerStyle": "...",
+  "whyYouWillLike": ["...", "...", "..."]
+}
     `;
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant", // Switched to a faster model, great for this task
+      model: "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.8,
+      temperature: 0.9,
+    });
+    console.log("📡 Groq Raw Response:", completion);
+
+    let aiRaw = completion.choices[0]?.message?.content;
+
+    let aiJson;
+    try {
+      aiJson = JSON.parse(aiRaw);
+    } catch {
+      // fallback: wrap AI output safely
+      aiJson = {
+        standard: overview,
+        noSpoilers: overview,
+        oneLine: overview.split(".")[0],
+        trailerStyle: overview,
+        whyYouWillLike: ["Unique story", "Strong themes", "Great visuals"],
+      };
+    }
+
+    // Save to cache
+    await docRef.set({
+      ...aiJson,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const rewritten = completion.choices[0]?.message?.content?.trim();
+    return res.json(aiJson);
 
-    if (rewritten) {
-      await docRef.set({
-        title,
-        rewritten,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return res.json({ rewritten });
-    } else {
-      // If AI fails, gracefully fall back to a shortened original overview
-      const fallback = overview.split('. ')[0] + '.';
-      return res.json({ rewritten: fallback });
-    }
   } catch (err) {
-    console.error(`[Groq Error for ${title}]:`, err.message);
-    // Gracefully fallback on error
-    const fallback = overview.split('. ')[0] + '.';
-    return res.json({ rewritten: fallback });
+    console.error("AI Error:", err.message);
+
+    return res.json({
+      standard: overview,
+      noSpoilers: overview,
+      oneLine: overview.split(".")[0],
+      trailerStyle: overview,
+      whyYouWillLike: ["Strong storytelling", "Engaging pacing", "Good performances"],
+    });
   }
 });
+
+router.get("/ai/rewrite-overview-test", (req, res) => {
+  res.json({ status: "Backend AI route is reachable" });
+});
+
 
 export default router;
