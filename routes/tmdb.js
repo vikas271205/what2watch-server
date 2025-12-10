@@ -130,12 +130,17 @@ router.get("/discover/hollywood", async (req, res) => {
 // ------------------------------------------------------
 router.get("/genres", async (_req, res) => {
   const cacheKey = "genres";
+
   try {
     const url = `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en-US`;
-    const data = await getCachedOrFetch(cacheKey, url,86400);
-    if(!data || !data.results){
-    	return res.status(500).json({error :"Invalid response from TMDB"});
+
+    const data = await getCachedOrFetch(cacheKey, url, 86400);
+
+    // FIX: TMDB returns { genres: [...] } NOT { results: [...] }
+    if (!data || !Array.isArray(data.genres)) {
+      return res.status(500).json({ error: "Invalid genre format from TMDB" });
     }
+
     res.json(data.genres);
   } catch (err) {
     console.error("TMDB Genres Error:", err);
@@ -215,6 +220,29 @@ router.get("/movie/:id/credits", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch movie credits" });
   }
 });
+
+// ------------------------------------------------------
+// 🎫 Movie Certifications (Age Ratings)
+// ------------------------------------------------------
+router.get("/movie/:id/release_dates", async (req, res) => {
+  const { id } = req.params;
+  const cacheKey = `movie_certifications_${id}`;
+
+  try {
+    const url = `${BASE_URL}/movie/${id}/release_dates?api_key=${API_KEY}`;
+    const data = await getCachedOrFetch(cacheKey, url, 86400); // cache 1 day
+
+    if (!data || !data.results) {
+      return res.status(500).json({ error: "Invalid response from TMDB release dates" });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("TMDB Movie Certifications Error:", err);
+    res.status(500).json({ error: "Failed to fetch movie certifications" });
+  }
+});
+
 
 router.get("/movie/:id/similar", async (req, res) => {
   const { id } = req.params;
@@ -360,18 +388,23 @@ router.get("/tv/:id/season/:season_number", async (req, res) => {
 
 router.get("/genre/tv", async (_req, res) => {
   const cacheKey = "tv_genres";
+
   try {
     const url = `${BASE_URL}/genre/tv/list?api_key=${API_KEY}&language=en-US`;
+
     const data = await getCachedOrFetch(cacheKey, url);
-    if(!data){
-    	return res.status(500).json({error :"Invalid response from TMDB"});
+
+    if (!data || !Array.isArray(data.genres)) {
+      return res.status(500).json({ error: "Invalid TV genre format from TMDB" });
     }
-    res.json(data);
+
+    res.json(data.genres);
   } catch (err) {
     console.error("TMDB TV Genre Error:", err);
     res.status(500).json({ error: "Failed to fetch TV genres" });
   }
 });
+
 
 router.get("/discover/tv", async (req, res) => {
   const genreParam = req.query.with_genres;

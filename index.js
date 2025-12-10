@@ -13,6 +13,8 @@ import { discoverRouter } from "./routes/tmdbDiscover.js";
 import rewriteOverviewRouter from "./routes/rewriteOverview.js";
 import reviewsRouter from "./routes/reviews.js";
 import ratingsRouter from "./routes/ratings.js";
+import aiWorthItRouter from "./routes/aiWorthIt.js";
+
 dotenv.config();
 
 const app = express();
@@ -54,6 +56,8 @@ app.use("/api/recommend", recommendRouter);
 app.use("/api", rewriteOverviewRouter);
 app.use("/api", reviewsRouter);
 app.use("/api", ratingsRouter);
+app.use("/api", aiWorthItRouter);
+
 
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
