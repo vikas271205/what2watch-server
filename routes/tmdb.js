@@ -23,7 +23,7 @@ const tmdbLimiter= rateLimit({
 	message: {error :"Too many requests. Please slow down.."},
 });
 
-router.use(tmdbLimiter);
+
 
 const getCachedOrFetch = async (cacheKey, url,ttl=3600) => {
   if (cache.has(cacheKey)) {
@@ -61,7 +61,7 @@ router.get("/search", searchLimiter, async (req, res) => {
 // ------------------------------------------------------
 // 🔥 Trending & Discover
 // ------------------------------------------------------
-router.get("/trending", async (req, res) => {
+router.get("/trending",tmdbLimiter, async (req, res) => {
   const { time = "day", page = 1 } = req.query;
   const cacheKey = `trending_${time}_${page}`;
   try {
@@ -77,7 +77,7 @@ router.get("/trending", async (req, res) => {
   }
 });
 
-router.get("/discover", async (req, res) => {
+router.get("/discover",tmdbLimiter, async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_${page}`;
   try {
@@ -93,11 +93,18 @@ router.get("/discover", async (req, res) => {
   }
 });
 
-router.get("/discover/bollywood", async (req, res) => {
+router.get("/discover/bollywood", tmdbLimiter, async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_bollywood_${page}`;
   try {
-    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc&page=${page}`;
+    const url =
+  `${BASE_URL}/discover/movie?api_key=${API_KEY}` +
+  `&with_original_language=hi` +
+  `&sort_by=popularity.desc` +
+  `&primary_release_date.gte=2022-01-01` +
+  `&vote_count.gte=30` +
+  `&include_adult=false` +
+  `&page=${page}`;
     const data = await getCachedOrFetch(cacheKey, url,1800);
     if(!data || !data.results){
     	return res.status(500).json({error :"Invalid response from TMDB"});
@@ -109,7 +116,7 @@ router.get("/discover/bollywood", async (req, res) => {
   }
 });
 
-router.get("/discover/hollywood", async (req, res) => {
+router.get("/discover/hollywood",tmdbLimiter, async (req, res) => {
   const { page = 1 } = req.query;
   const cacheKey = `discover_hollywood_${page}`;
   try {
@@ -124,6 +131,58 @@ router.get("/discover/hollywood", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch Hollywood movies" });
   }
 });
+
+
+router.get("/now_playing/in", async (req, res) => {
+  const cacheKey = "now_playing_india_languages_v2";
+  const languages = ["hi", "ta", "te", "kn", "ml"]; 
+
+  try {
+    if (cache.has(cacheKey)) {
+      return res.json(cache.get(cacheKey));
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const past_60 = new Date(Date.now() -15*24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    const promises = languages.map((lang) => {
+      const url =
+        `${BASE_URL}/discover/movie?api_key=${API_KEY}` +
+        `&with_original_language=${lang}` +
+        `&region=IN` +
+        `&release_date.lte=${today}` +
+        `&release_date.gte=${past_60}` +
+        `&sort_by=popularity.desc` +
+        `&include_adult=false`;
+
+      return fetchWithRetry(url);
+    });
+
+    const responses = await Promise.all(promises);
+
+    let merged = [];
+    responses.forEach((res) => {
+      if (res?.results?.length > 0) merged.push(...res.results);
+    });
+
+    // Remove duplicates
+    const unique = Array.from(new Map(merged.map((m) => [m.id, m])).values());
+
+    // Most popular at top
+    unique.sort((a, b) => b.popularity - a.popularity);
+
+    // Cache for 30 minutes
+    cache.set(cacheKey, unique, 1800);
+
+    res.json(unique);
+  } catch (err) {
+    console.error("TMDB India Now-Playing Error:", err);
+    res.status(500).json({ error: "Failed to fetch India now-playing movies" });
+  }
+});
+
 
 // ------------------------------------------------------
 // 🎭 Genres & By‑Genre
@@ -406,7 +465,7 @@ router.get("/genre/tv", async (_req, res) => {
 });
 
 
-router.get("/discover/tv", async (req, res) => {
+router.get("/discover/tv",tmdbLimiter, async (req, res) => {
   const genreParam = req.query.with_genres;
   const language = req.query.language;
   const year = req.query.year;
