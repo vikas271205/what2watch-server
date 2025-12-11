@@ -5,11 +5,10 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
 import { recommendRouter } from "./routes/recommend.js";
-
+import { hiddenGemsRouter } from "./routes/hiddenGems.js";
 import { omdbRouter } from "./routes/omdb.js";
 import { tmdbRouter } from "./routes/tmdb.js";
 import { watchmodeRouter } from "./routes/watchMode.js";
-import { discoverRouter } from "./routes/tmdbDiscover.js";
 import rewriteOverviewRouter from "./routes/rewriteOverview.js";
 import reviewsRouter from "./routes/reviews.js";
 import ratingsRouter from "./routes/ratings.js";
@@ -51,12 +50,13 @@ app.use(express.json());
 app.use("/api/omdb", omdbRouter);
 app.use("/api/tmdb", tmdbRouter);
 app.use("/api/watchmode", watchmodeRouter);
-app.use("/api/tmdb/discover", discoverRouter);
+
 app.use("/api/recommend", recommendRouter);
 app.use("/api", rewriteOverviewRouter);
 app.use("/api", reviewsRouter);
 app.use("/api", ratingsRouter);
 app.use("/api", aiWorthItRouter);
+app.use("/api/hidden-gems", hiddenGemsRouter);
 
 
 const limiter = rateLimit({
