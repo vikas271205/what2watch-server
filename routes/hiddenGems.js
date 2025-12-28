@@ -4,78 +4,122 @@ import NodeCache from "node-cache";
 import rateLimit from "express-rate-limit";
 
 const router = express.Router();
-const cache = new NodeCache({ stdTTL: 43200 }); // 12 hours
+const cache = new NodeCache({ stdTTL: 6 * 60 * 60 });
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const BASE = "https://api.themoviedb.org/3";
+const CURRENT_YEAR = new Date().getFullYear();
 
-if (!TMDB_API_KEY) {
-  console.error("❌ Missing TMDB_API_KEY in env");
-}
+const ALLOWED_LANGUAGES = ["en", "hi", "ko", "ja", "es", "fr"];
 
-const hiddenGemLimiter = rateLimit({
+const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
-  message: "Too many requests. Please try again later.",
 });
 
-// ----------------------
-// HIDDEN GEMS ROUTE
-// ----------------------
-router.get("/", hiddenGemLimiter, async (req, res) => {
-  console.log("🔎 [HiddenGems] Incoming request from:", req.ip);
-
-  const cacheKey = "hidden_gems_v1";
-
-  // Check cache
+router.get("/", limiter, async (_req, res) => {
+  const cacheKey = "hidden_gems_rotating_v5";
   if (cache.has(cacheKey)) {
-    const cached = cache.get(cacheKey);
-    console.log(`🧠 [HiddenGems] Memory cache hit → items: ${cached.length}`);
-    return res.json(cached);
+    return res.json(cache.get(cacheKey));
   }
 
-  console.log("🟡 [HiddenGems] Cache miss. Fetching from TMDB...");
-
   try {
-    const url =
-      `https://api.themoviedb.org/3/discover/movie?` +
-      `api_key=${TMDB_API_KEY}` +
-      `&sort_by=vote_average.desc` +
-      `&vote_average.gte=7` +
-      `&vote_count.lte=2000` +
-      `&popularity.lte=50` +
-      `&include_adult=false` +
-      `&language=en-US`;
+    // 🔁 Fetch multiple pages to expand pool
+    const moviePages = [1, 2, 3];
+    const tvPages = [1, 2, 3];
 
-    const safeUrl = url.replace(TMDB_API_KEY, "HIDDEN_API_KEY");
-    console.log("🌐 [HiddenGems] TMDB URL:", safeUrl);
-
-    const response = await fetch(url);
-    console.log("📡 [HiddenGems] TMDB status:", response.status);
-    console.log(
-      "⏳ [HiddenGems] Remaining rate-limit:",
-      response.headers.get("x-ratelimit-remaining")
+    const movieFetches = moviePages.map(p =>
+      fetch(
+        `${BASE}/discover/movie?api_key=${TMDB_API_KEY}` +
+          `&sort_by=vote_average.desc` +
+          `&vote_average.gte=7` +
+          `&vote_count.gte=200` +
+          `&include_adult=false` +
+          `&page=${p}`
+      )
     );
 
-    const raw = await response.text();
-    console.log("📄 [HiddenGems] TMDB raw length:", raw.length);
-    console.log("📄 [HiddenGems] TMDB raw sample:", raw.slice(0, 200));
+    const tvFetches = tvPages.map(p =>
+      fetch(
+        `${BASE}/discover/tv?api_key=${TMDB_API_KEY}` +
+          `&sort_by=vote_average.desc` +
+          `&vote_average.gte=7` +
+          `&vote_count.gte=150` +
+          `&page=${p}`
+      )
+    );
 
-    let json;
-    try {
-      json = JSON.parse(raw);
-    } catch (err) {
-      console.error("❌ [HiddenGems] Invalid JSON:", raw.slice(0, 200));
-      return res.status(500).json({ error: "Invalid TMDB JSON" });
+    const movieResponses = await Promise.all(movieFetches);
+    const tvResponses = await Promise.all(tvFetches);
+
+    const movies = movieResponses.flatMap(r => r.ok ? r.json() : []);
+    const tv = tvResponses.flatMap(r => r.ok ? r.json() : []);
+
+    const movieResults = (await Promise.all(movies)).flatMap(d => d.results || []);
+    const tvResults = (await Promise.all(tv)).flatMap(d => d.results || []);
+
+    const normalize = (item, type) => {
+      const rating = item.vote_average ?? 0;
+      const popularity = item.popularity ?? 0;
+      const votes = item.vote_count ?? 0;
+      const language = item.original_language;
+
+      const releaseYear =
+        type === "movie"
+          ? Number(item.release_date?.slice(0, 4))
+          : Number(item.first_air_date?.slice(0, 4));
+
+      // HARD GATES (true hidden gem)
+      if (
+        rating < 7.2 ||
+        votes < 300 ||
+        votes > 6000 ||
+        popularity > 90 ||
+        !releaseYear ||
+        releaseYear >= CURRENT_YEAR - 1 ||
+        !ALLOWED_LANGUAGES.includes(language) ||
+        !item.poster_path
+      ) {
+        return null;
+      }
+
+      const score =
+        rating * 2.1 +
+        Math.log(votes) -
+        popularity * 0.5;
+
+      return {
+        id: item.id,
+        title: type === "movie" ? item.title : item.name,
+        poster_path: item.poster_path,
+        vote_average: rating,
+        vote_count: votes,
+        popularity,
+        hiddenGemScore: score,
+        type,
+        original_language: language,
+      };
+    };
+
+    const pool = [
+      ...movieResults.map(m => normalize(m, "movie")),
+      ...tvResults.map(t => normalize(t, "tv")),
+    ].filter(Boolean);
+
+    // 🔀 Shuffle pool (Fisher–Yates)
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
 
-    const results = json?.results || [];
-    console.log(`📊 [HiddenGems] Results count: ${results.length}`);
+    const final = pool.slice(0, 15);
 
-    cache.set(cacheKey, results);
-    return res.json(results);
+    cache.set(cacheKey, final);
+    res.json(final);
   } catch (err) {
-    console.error("❌ [HiddenGems] Fetch error:", err.message);
-    return res.status(500).json({ error: "Failed to fetch hidden gems" });
+    console.error("Hidden Gems error:", err);
+    res.status(500).json({ error: "Failed to compute hidden gems" });
   }
 });
 
 export { router as hiddenGemsRouter };
+
