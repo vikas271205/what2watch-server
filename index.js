@@ -13,6 +13,7 @@ import rewriteOverviewRouter from "./routes/rewriteOverview.js";
 import reviewsRouter from "./routes/reviews.js";
 import ratingsRouter from "./routes/ratings.js";
 import aiWorthItRouter from "./routes/aiWorthIt.js";
+import ottRouter from "./routes/ott.js";
 
 dotenv.config();
 
@@ -57,6 +58,8 @@ app.use("/api", reviewsRouter);
 app.use("/api", ratingsRouter);
 app.use("/api", aiWorthItRouter);
 app.use("/api/hidden-gems", hiddenGemsRouter);
+
+app.use("/api/ott", ottRouter);
 
 
 const limiter = rateLimit({
