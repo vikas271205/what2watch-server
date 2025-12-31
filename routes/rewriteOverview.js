@@ -11,7 +11,7 @@ const router = express.Router();
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 router.post("/ai/rewrite-overview", async (req, res) => {
-  console.log("📥 AI request received:", req.body);
+  // console.log("📥 AI request received:", req.body);
 
   const { title, overview, tmdbId, type = "movie" } = req.body;
 
@@ -30,15 +30,15 @@ router.post("/ai/rewrite-overview", async (req, res) => {
 
     // If expired → refresh
     if (data.expiresAt && data.expiresAt.toDate() < new Date()) {
-      console.log(`[Cache] EXPIRED for ${cacheId}, regenerating...`);
+      // console.log(`[Cache] EXPIRED for ${cacheId}, regenerating...`);
     } else {
-      console.log(`[Cache] HIT for ${cacheId}`);
+      // console.log(`[Cache] HIT for ${cacheId}`);
       return res.json(data);
     }
   }
 
 
-    console.log(`[Cache] MISS for ${cacheId}`);
+    // console.log(`[Cache] MISS for ${cacheId}`);
 
     // ---------------- NEW SIMPLE + HONEST PROMPT ----------------
     const prompt = `

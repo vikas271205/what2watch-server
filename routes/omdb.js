@@ -33,7 +33,7 @@ router.get("/", omdbLimiter, async (req, res) => {
 
   // Check in-memory cache first
   if (cache.has(cacheKey)) {
-    console.log(`🧠 OMDb memory cache hit: ${cacheKey}`);
+    // console.log(`🧠 OMDb memory cache hit: ${cacheKey}`);
     return res.json(cache.get(cacheKey));
   }
 
@@ -42,7 +42,7 @@ router.get("/", omdbLimiter, async (req, res) => {
     const snapshot = await docRef.get();
 
     if (snapshot.exists) {
-      console.log(`🔥 Firestore cache hit: ${docId}`);
+      // console.log(`🔥 Firestore cache hit: ${docId}`);
       const data = snapshot.data();
       cache.set(cacheKey, data);
       return res.json(data);
@@ -53,7 +53,7 @@ router.get("/", omdbLimiter, async (req, res) => {
     let url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${query}`;
     if (year) url += `&y=${encodeURIComponent(year)}`;
 
-    console.log("🌐 Fetching OMDb:", url);
+    // console.log("🌐 Fetching OMDb:", url);
     const response = await fetch(url);
     const raw = await response.text();
 
