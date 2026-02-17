@@ -18,6 +18,37 @@ const omdbLimiter = rateLimit({
   message: "Too many requests. Please try again later.",
 });
 
+export const fetchOmdbRatings = async (title, year) => {
+  if (!title) return null;
+
+  const query = encodeURIComponent(title);
+  let url = `https://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&t=${query}`;
+  if (year) url += `&y=${encodeURIComponent(year)}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (data.Response === "False") return null;
+
+  let imdbRating = null;
+  let rtRating = null;
+
+  if (data.imdbRating && data.imdbRating !== "N/A") {
+    imdbRating = Number(data.imdbRating);
+  }
+
+  const rtObj = data.Ratings?.find(
+    (r) => r.Source === "Rotten Tomatoes"
+  );
+
+  if (rtObj?.Value) {
+    rtRating = parseInt(rtObj.Value.replace("%", ""));
+  }
+
+  return { imdbRating, rtRating };
+};
+
+
 router.get("/", omdbLimiter, async (req, res) => {
   const { title, year } = req.query;
   if (!title) return res.status(400).json({ error: "title is required" });
