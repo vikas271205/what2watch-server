@@ -87,7 +87,7 @@ router.post("/add", verifyAdmin, async (req, res) => {
       rtRating,
       genre_ids,
       language,
-      createdAt: Date.now(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
 
