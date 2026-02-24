@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyAdmin } from "../middleware/verifyAdmin.js";
-import { db } from "../utils/firebaseAdmin.js";
+import { admin, db } from "../utils/firebaseAdmin.js";
 import { fetchOmdbRatings } from "./omdb.js";
 import fetch from "node-fetch";
 
